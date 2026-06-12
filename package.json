@@ -1,0 +1,16 @@
+{
+  "name": "my-flutter-project-ci-review",
+  "version": "1.0.0",
+  "description": "Automated code review scripts using Danger JS for a Flutter project.",
+  "main": "dangerfile.js",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "axios": "^1.7.2",
+    "danger": "^12.3.0"
+  }
+}
