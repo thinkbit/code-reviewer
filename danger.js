@@ -302,6 +302,10 @@ Write code review comments terse and actionable. One line per finding. Location,
 **Output:**
 Provide a bulleted list of findings. If there are no bug, risk, or nit issues, strictly output: "✅ No significant issues found."
 
+**IMPORTANT: Only reference line numbers of ADDED lines (lines starting with "+"). 
+Do NOT comment on context lines (lines starting with " ") or deleted lines (lines starting with "-").
+Use the exact "L<number>" shown at the beginning of the added line.**
+
 Diff for \`${file}\` (with line numbers prefixed):
 \`\`\`diff
 ${formattedDiff}
@@ -309,33 +313,45 @@ ${formattedDiff}
 `;
 
         const feedback = await callGemini(prompt, `File Review: ${file}`);
-        console.log(`[AI Review] Raw feedback for ${file}:\n${feedback}`);
+
 
         if (feedback && !feedback.includes("No significant issues found.")) {
+            // Collect valid line numbers in the new file from the structured diff
+            const validLineNumbers = new Set();
+            structuredDiff.chunks.forEach(chunk => {
+                chunk.changes.forEach(change => {
+                    if (change.ln) validLineNumbers.add(change.ln);       // add/del lines
+                    if (change.ln2) validLineNumbers.add(change.ln2);     // context lines (new side)
+                });
+            });
+
+            let parsedFindingsCount = 0;
             const lines = feedback.split("\n");
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
 
-                let match = trimmed.match(/^(?:-\s*|\d+\.\s*)?([^:]+):L(\d+):\s*(.*)$/);
+                // Match formats:
+                // 1) file:Lline: severity message
+                // 2) Lline: severity message
+                let match = trimmed.match(/^(?:[-\*\+]\s*|\d+\.\s*)?([^:]+):L(\d+):\s*(.*)$/);
                 let detectedFile = file;
                 let lineNum = null;
                 let commentText = "";
-
                 if (match) {
-                    detectedFile = match[1].trim();
+                    detectedFile = match[1].trim().replace(/`/g, '');  // strip backticks
                     lineNum = parseInt(match[2], 10);
-                    commentText = match[3].trim();
+                    commentText = match[3].trim().replace(/`/g, '');   // strip backticks
                 } else {
-                    match = trimmed.match(/^(?:-\s*|\d+\.\s*)?L(\d+):\s*(.*)$/);
+                    // Updated fallback regex to also support standard markdown bullets
+                    match = trimmed.match(/^(?:[-\*\+]\s*|\d+\.\s*)?L(\d+):\s*(.*)$/);
                     if (match) {
                         lineNum = parseInt(match[1], 10);
-                        commentText = match[2].trim();
+                        commentText = match[2].trim().replace(/`/g, '');  // strip backticks
                     }
                 }
 
-                if (lineNum && commentText) {
-                    console.log(`[AI Review] Posting inline: ${detectedFile}:L${lineNum}: ${commentText}`);
+                if (lineNum && commentText && validLineNumbers.has(lineNum)) {
                     const lowerText = commentText.toLowerCase();
                     if (lowerText.includes("🔴 bug") || lowerText.includes("🛑 p0") || lowerText.includes("⚠️ p1")) {
                         fail(commentText, detectedFile, lineNum);
@@ -344,10 +360,16 @@ ${formattedDiff}
                     } else {
                         message(commentText, detectedFile, lineNum);
                     }
+                    parsedFindingsCount++;
                 } else {
-                    console.log(`[AI Review] Fallback to general comment: ${trimmed}`);
-                    allAiFeedback.push(`- **${detectedFile}**: ${commentText || trimmed}`);
+                    // Fallback to general comment if line was not found or couldn't parse line number
+                    const prefix = lineNum ? `**${detectedFile} (Line ${lineNum})**: ` : `**${detectedFile}**: `;
+                    const content = commentText || trimmed.replace(/^(?:-\s*)/, '');
+                    allAiFeedback.push(`- ${prefix}${content}`);
                 }
+            }
+            if (parsedFindingsCount > 0) {
+                console.log(`Successfully parsed and posted ${parsedFindingsCount} inline review comment(s) for ${file}.`);
             }
         } else if (!feedback) {
             allAiFeedback.push(`### ⚠️ Review for \`${file}\`\n\nCould not get AI feedback for this file.`);
