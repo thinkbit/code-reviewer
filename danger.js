@@ -71,7 +71,7 @@ async function callGemini(prompt, purpose = 'Generic Request') {
     
 
     try {
-        const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
         const response = await axios.post(
             endpoint, {
             contents: [{
@@ -311,25 +311,11 @@ ${formattedDiff}
         const feedback = await callGemini(prompt, `File Review: ${file}`);
 
         if (feedback && !feedback.includes("No significant issues found.")) {
-            // Collect valid line numbers in the new file from the structured diff
-            const validLineNumbers = new Set();
-            structuredDiff.chunks.forEach(chunk => {
-                chunk.changes.forEach(change => {
-                    if (change.ln) {
-                        validLineNumbers.add(change.ln);
-                    }
-                });
-            });
-
-            let parsedFindingsCount = 0;
             const lines = feedback.split("\n");
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
 
-                // Match formats:
-                // 1) file:Lline: severity message
-                // 2) Lline: severity message
                 let match = trimmed.match(/^(?:-\s*|\d+\.\s*)?([^:]+):L(\d+):\s*(.*)$/);
                 let detectedFile = file;
                 let lineNum = null;
@@ -347,7 +333,7 @@ ${formattedDiff}
                     }
                 }
 
-                if (lineNum && commentText && validLineNumbers.has(lineNum)) {
+                if (lineNum && commentText) {
                     const lowerText = commentText.toLowerCase();
                     if (lowerText.includes("🔴 bug") || lowerText.includes("🛑 p0") || lowerText.includes("⚠️ p1")) {
                         fail(commentText, detectedFile, lineNum);
@@ -356,16 +342,9 @@ ${formattedDiff}
                     } else {
                         message(commentText, detectedFile, lineNum);
                     }
-                    parsedFindingsCount++;
-                } else {
-                    // Fallback to general comment if line was not found or couldn't parse line number
-                    const prefix = lineNum ? `**${detectedFile} (Line ${lineNum})**: ` : `**${detectedFile}**: `;
-                    const content = commentText || trimmed.replace(/^(?:-\s*)/, '');
-                    allAiFeedback.push(`- ${prefix}${content}`);
+                } else if (commentText) {
+                    allAiFeedback.push(`- **${detectedFile}**: ${commentText}`);
                 }
-            }
-            if (parsedFindingsCount > 0) {
-                console.log(`Successfully parsed and posted ${parsedFindingsCount} inline review comment(s) for ${file}.`);
             }
         } else if (!feedback) {
             allAiFeedback.push(`### ⚠️ Review for \`${file}\`\n\nCould not get AI feedback for this file.`);
@@ -373,7 +352,7 @@ ${formattedDiff}
     }
 
     if (allAiFeedback.length > 0) {
-        markdown("## 🤖 AI Assistant Review\n\n" + allAiFeedback.join("\n\n---\n\n"));
+        markdown("## 🤖 AI Assistant Review\n\n### General Comments\n" + allAiFeedback.join("\n"));
     }
 }
 
