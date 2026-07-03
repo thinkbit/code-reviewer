@@ -309,6 +309,7 @@ ${formattedDiff}
 `;
 
         const feedback = await callGemini(prompt, `File Review: ${file}`);
+        console.log(`[AI Review] Raw feedback for ${file}:\n${feedback}`);
 
         if (feedback && !feedback.includes("No significant issues found.")) {
             const lines = feedback.split("\n");
@@ -334,6 +335,7 @@ ${formattedDiff}
                 }
 
                 if (lineNum && commentText) {
+                    console.log(`[AI Review] Posting inline: ${detectedFile}:L${lineNum}: ${commentText}`);
                     const lowerText = commentText.toLowerCase();
                     if (lowerText.includes("🔴 bug") || lowerText.includes("🛑 p0") || lowerText.includes("⚠️ p1")) {
                         fail(commentText, detectedFile, lineNum);
@@ -342,8 +344,9 @@ ${formattedDiff}
                     } else {
                         message(commentText, detectedFile, lineNum);
                     }
-                } else if (commentText) {
-                    allAiFeedback.push(`- **${detectedFile}**: ${commentText}`);
+                } else {
+                    console.log(`[AI Review] Fallback to general comment: ${trimmed}`);
+                    allAiFeedback.push(`- **${detectedFile}**: ${commentText || trimmed}`);
                 }
             }
         } else if (!feedback) {
