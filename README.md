@@ -1,6 +1,6 @@
 # 🤖 Flutter Code Reviewer (Danger JS + Gemini API)
 
-An automated code review pipeline designed for Flutter/Dart repositories. Powered by **Danger JS** and the **Google Gemini API** (`gemini-3.5-flash`), this script automatically reviews GitLab Merge Requests (MRs), triages issues, generates draft changelogs, and checks project configuration health.
+An automated code review pipeline designed for Flutter/Dart repositories. Powered by **Danger JS** and the **Google Gemini API** (`gemini-2.5-flash`), this script automatically reviews GitLab Merge Requests (MRs), triages issues, generates draft changelogs, and checks project configuration health.
 
 ---
 
@@ -85,5 +85,5 @@ The script executes the following functions sequentially:
 2.  **`checkDeletedFiles`**: Warns about any deleted files.
 3.  **`reviewFileChanges`**: Checks if `CHANGELOG.md` needs to be updated and verifies that `pubspec.lock` matches `pubspec.yaml`.
 4.  **`reviewCodeContent`**: Scans the raw diffs for syntax issues like `print()` and `TODO` comments.
-5.  **`reviewPerFileWithGeminiAI`**: Sends structured diffs to `gemini-3.5-flash` for automated quality review using the configured tone.
+5.  **`reviewPerFileWithGeminiAI`**: Sends structured diffs to `gemini-2.5-flash` for automated quality review using the configured tone.
 6.  **`reportTotalTokenUsage`**: Calculates and prints API token metrics to monitor usage patterns.
