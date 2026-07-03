@@ -23,17 +23,84 @@ Ensure you have Node.js installed, then install the project dependencies:
 npm install
 ```
 
-### 2. Configure Environment Variables
-You must set your Gemini API key in your environment:
-```bash
-export GEMINI_API_KEY="your-api-key-here"
-```
-
-### 3. Run the Review Script
+### 2. Run the Review Script
 To run the script locally or within your GitLab CI/CD runner:
 ```bash
 npx danger run --dangerfile danger.js
 ```
+
+---
+
+## 🔧 CI/CD Setup (GitLab)
+
+### Required Environment Variables
+
+Add these to your GitLab project under **Settings > CI/CD > Variables**:
+
+| Variable | Required | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | Yes | Google Gemini API key. Get one from [AI Studio](https://aistudio.google.com/apikey). |
+| `DANGER_GITLAB_API_TOKEN` | Yes | A GitLab **Personal Access Token** with `api` scope. This lets Danger post comments on MRs. |
+
+> **Do not** mark these as "masked" if you're debugging. Masked variables work fine in production but can cause issues if you need to troubleshoot pipeline output.
+
+### Setting Up `DANGER_GITLAB_API_TOKEN`
+
+1. In GitLab, go to **User Settings > Access Tokens** (or have an admin create a **Project Access Token**).
+2. Create a token with the **`api`** scope.
+3. Copy the token and add it as a CI/CD variable in your project.
+
+> For project-level tokens, go to **Settings > Access Tokens** in the project, and assign the **`api`** role.
+
+### GitLab CI/CD Pipeline
+
+Add the review job to your `.gitlab-ci.yml`:
+
+```yaml
+code-review:
+  image: node:20
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  before_script:
+    - npm install
+  script:
+    - npx danger run --dangerfile danger.js
+```
+
+Danger JS automatically detects the merge request from GitLab CI environment variables (`CI_MERGE_REQUEST_IID`). No extra configuration is needed for MR identification.
+
+### GitHub CI (Alternative)
+
+If using GitHub Actions instead of GitLab:
+
+```yaml
+name: Code Review
+on: pull_request
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx danger run --dangerfile danger.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+```
+
+### Environment Variable Summary
+
+| Variable | Where to set | Used by |
+|---|---|---|
+| `GEMINI_API_KEY` | GitLab CI/CD Variables | `danger.js` — calls Gemini API for AI review |
+| `DANGER_GITLAB_API_TOKEN` | GitLab CI/CD Variables | Danger JS — posts inline MR comments |
+| `GITHUB_TOKEN` | GitHub Actions secrets | Danger JS — posts PR comments (GitHub only) |
+
+> **Tip:** Never commit tokens to your repository. Always use CI/CD variables or secrets managers.
 
 ---
 
@@ -71,9 +138,9 @@ Diff for \`\${file}\` (with line numbers prefixed):
 ```
 
 ### 3. Line Number Verification
-The script parses the AI feedback and matches it against line numbers that were actually modified in the structured diff:
-* If the line number is **valid** (part of the diff), Danger JS posts an **inline comment** directly on the file diff line.
-* If the line number is **invalid** (hallucinated or outside the changed hunk), the script automatically falls back to a **general MR comment** format: `- **<file> (Line <line>)**: <comment>`, keeping your CI runs safe from crashing.
+The script parses the caveman-format feedback and extracts line numbers:
+* If a line number is found, Danger JS posts an **inline comment** directly on the file diff line (threaded review).
+* If no line number is found, it falls back to a **general MR comment** format: `- **<file>**: <comment>`.
 
 
 ---
